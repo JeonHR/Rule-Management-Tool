@@ -111,43 +111,48 @@ class ProductManagerUI(QWidget):
 
 
         # Product / Version
+        # hl = QHBoxLayout()
+        # self.product_list = QListWidget()
+        # self.version_list = QListWidget()
+        # self.product_list.currentTextChanged.connect(self.refresh_versions)
+        # hl.addWidget(self.wrap("Product", self.product_list))
+        # hl.addWidget(self.wrap("Version", self.version_list))
+        # main.addLayout(hl)
+
         hl = QHBoxLayout()
         self.product_list = QListWidget()
         self.version_list = QListWidget()
         self.product_list.currentTextChanged.connect(self.refresh_versions)
-        hl.addWidget(self.wrap("Product", self.product_list))
-        hl.addWidget(self.wrap("Version", self.version_list))
+        self.version_list.currentTextChanged.connect(self.load_rules)
+
+        # Product 영역
+        prod_layout = QVBoxLayout()
+        prod_layout.addWidget(self.wrap("Product", self.product_list))
+
+        self.btn_del_product = QPushButton("Delete Product")
+        self.btn_del_product.clicked.connect(self.delete_product)
+        self.btn_del_product.setVisible(False)
+        prod_layout.addWidget(self.btn_del_product)
+
+        prod_container = QWidget()
+        prod_container.setLayout(prod_layout)
+        
+        hl.addWidget(prod_container)
+
+        # Version 영역
+        ver_layout = QVBoxLayout()
+        ver_layout.addWidget(self.wrap("Version", self.version_list))
+
+        self.btn_del_version = QPushButton("Delete Version")
+        self.btn_del_version.clicked.connect(self.delete_version)
+        self.btn_del_version.setVisible(False)
+        ver_layout.addWidget(self.btn_del_version)
+
+        ver_container = QWidget()
+        ver_container.setLayout(ver_layout)
+        hl.addWidget(ver_container)
+
         main.addLayout(hl)
-
-        # hl = QHBoxLayout()
-        # self.product_list = QListWidget()
-        # self.version_list = QListWidget()
-
-        # # Product 영역
-        # prod_layout = QVBoxLayout()
-        # prod_layout.addWidget(self.wrap("Product", self.product_list))
-
-        # self.btn_del_product = QPushButton("Delete Product")
-        # self.btn_del_product.clicked.connect(self.delete_product)
-        # prod_layout.addWidget(self.btn_del_product)
-
-        # prod_container = QWidget()
-        # prod_container.setLayout(prod_layout)
-        # hl.addWidget(prod_container)
-
-        # # Version 영역
-        # ver_layout = QVBoxLayout()
-        # ver_layout.addWidget(self.wrap("Version", self.version_list))
-
-        # self.btn_del_version = QPushButton("Delete Version")
-        # self.btn_del_version.clicked.connect(self.delete_version)
-        # ver_layout.addWidget(self.btn_del_version)
-
-        # ver_container = QWidget()
-        # ver_container.setLayout(ver_layout)
-        # hl.addWidget(ver_container)
-
-        # main.addLayout(hl)
 
 
 
@@ -251,6 +256,12 @@ class ProductManagerUI(QWidget):
     def on_mode_change(self, m):
         self.eng.setVisible(m == "ENG")
 
+        self.btn_del_product.setVisible(m == "ENG")
+        self.btn_del_version.setVisible(m == "ENG")
+        self.btn_delete_rule.setVisible(m == "ENG")
+
+
+
     def on_change_type(self, t):
         self.txt_group.setVisible(t == "TXT_PATH_CHANGE")
         self.file_group.setVisible(t == "FILE_CHANGE")
@@ -324,29 +335,49 @@ class ProductManagerUI(QWidget):
                 self.version_list.addItem(v)
     # ---------------- Delete Rule
     # 클래스 내 새 메서드 추가
+    
     def delete_txt_rule(self):
         selected = self.rule_list.selectedItems()
         if not selected:
-            QMessageBox.warning(self, "경고", "삭제할 규칙을 리스트에서 선택해 주십시오.")
+            QMessageBox.warning(self, "경고", "삭제할 규칙을 선택해 주십시오.")
             return
 
-        count = len(selected)
-        msg = f"선택한 {count}개 규칙을 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다.)"
+        p_item = self.product_list.currentItem()
+        v_item = self.version_list.currentItem()
+
+        if not p_item or not v_item:
+            QMessageBox.warning(self, "경고", "Product와 Version을 먼저 선택해 주십시오.")
+            return
+
+        product = p_item.text()
+        version = v_item.text()
 
         reply = QMessageBox.question(
             self,
             "규칙 삭제 확인",
-            msg,
+            f"선택한 {len(selected)}개 규칙을 정말 삭제하시겠습니까?\n(복구 불가)",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
 
-        if reply == QMessageBox.Yes:
-            for item in selected[:]:  # 복사본으로 순회 (아이템 제거 중 문제 방지)
-                row = self.rule_list.row(item)
-                self.rule_list.takeItem(row)
-            QMessageBox.information(self, "완료", f"{count}개 규칙이 삭제되었습니다.")
-    
+        if reply != QMessageBox.Yes:
+            return
+
+        rules_list = self.config["products"][product]["versions"][version]["rules"]
+
+        # UI에 표시된 순서대로 인덱스를 모음 (역순으로 처리)
+        rows_to_remove = sorted([self.rule_list.row(item) for item in selected], reverse=True)
+
+        for row in rows_to_remove:
+            # UI에서 제거
+            self.rule_list.takeItem(row)
+
+            # config에서도 같은 순서의 항목 제거
+            if row < len(rules_list):
+                del rules_list[row]
+
+        save_config(self.config)
+        QMessageBox.information(self, "완료", f"{len(rows_to_remove)}개 규칙이 삭제되었습니다.")   
 
     # 새 메서드 추가 (클래스 내부)
     def delete_product(self):
@@ -405,6 +436,20 @@ class ProductManagerUI(QWidget):
 
             save_config(self.config)
             QMessageBox.information(self, "완료", f"버전 '{version}'이 삭제되었습니다.")
+
+    def load_rules(self, version):
+        self.rule_list.clear()
+
+        p_item = self.product_list.currentItem()
+        if not p_item or not version:
+            return
+
+        product = p_item.text()
+        rules = self.config["products"][product]["versions"][version]["rules"]
+
+        for r in rules:
+            self.rule_list.addItem(json.dumps(r, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
