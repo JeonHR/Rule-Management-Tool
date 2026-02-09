@@ -16,4 +16,9 @@ PyQt5 Configuration Manager for Product/Version/Rule
   
 
 #### Knowledge
-- 
+- Role-based UI Visibility Control
+  - Dynamically shows or hides engineering-specific controls (on_mode_change)
+- Effective utilization of dictionaries enables straightforward implementation
+  - Utilized dictionaries to implement storage, retrieval, and deletion operations
+- Proactive Prevention of Side Effects in UI Operations
+  - Anticipated and prevented side effects of button operations to ensure stable and predictable system behavior
